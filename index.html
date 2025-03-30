@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player HLS Vimeo</title>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: black;
+      height: 100%;
+      width: 100%;
+    }
+    #video {
+      width: 100%;
+      height: 100%;
+      background: black;
+    }
+  </style>
+</head>
+<body>
+
+<video id="video" controls playsinline webkit-playsinline></video>
+
+<script>
+  const video = document.getElementById('video');
+  const videoSrc = "https://live-ak.vimeocdn.com/exp=1743365863~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=d77bd5718326f2cf720631820ad83952e2ae2bfc1cb273c2a501c1f3686b24dc/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8";
+
+  if (Hls.isSupported()) {
+    const hls = new Hls({
+      maxMaxBufferLength: 60,
+      enableWorker: true,
+    });
+    hls.loadSource(videoSrc);
+    hls.attachMedia(video);
+    hls.on(Hls.Events.MANIFEST_PARSED, function () {
+      video.play();
+    });
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = videoSrc;
+    video.addEventListener('loadedmetadata', function () {
+      video.play();
+    });
+  }
+</script>
+
+</body>
+</html>
