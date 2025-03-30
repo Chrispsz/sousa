@@ -4,61 +4,121 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Transmissão ao Vivo</title>
-    <link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet" />
+    <!-- HLS.js - Essencial para streaming HLS -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body, html {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body, html {
             height: 100%;
             width: 100%;
-            overflow: hidden;
             background-color: #000;
+            overflow: hidden;
             font-family: Arial, sans-serif;
         }
-        .video-container {
+        
+        .player-container {
+            position: relative;
             width: 100%;
             height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
         }
-        .video-js {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: cover;
-            transform: rotate(0deg);
-            transition: transform 0.3s ease;
+        
+        #video-player {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
-        @media (orientation: portrait) {
-            .video-js {
-                transform: rotate(90deg);
-                width: 100vh !important;
-                height: 100vw !important;
-            }
-        }
-        #error-message {
-            color: #ff4d4d;
-            background-color: rgba(0, 0, 0, 0.7);
+        
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.6);
             padding: 10px;
             border-radius: 5px;
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+        
+        .url-input {
+            width: 300px;
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            background: rgba(255, 255, 255, 0.9);
+        }
+        
+        .apply-btn {
+            padding: 8px 12px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .options {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .status {
             position: absolute;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            max-width: 90%;
-            z-index: 10;
-            font-size: 16px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+            z-index: 100;
         }
-        #loading-indicator {
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .live {
+            background-color: #f00;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .connecting {
+            background-color: #ff9800;
+        }
+        
+        .error {
+            background-color: #f44336;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .loading {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            z-index: 9;
             color: white;
             text-align: center;
+            z-index: 50;
         }
         .spinner {
             border: 5px solid rgba(255, 255, 255, 0.3);
@@ -69,86 +129,350 @@
             margin: 0 auto 10px;
             animation: spin 1s linear infinite;
         }
+        
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 80%;
+            z-index: 100;
+            display: none;
+        }
+        
+        .error-btn {
+            margin-top: 15px;
+            padding: 8px 16px;
+            background: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .wake-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            margin-left: 5px;
+        }
+        
+        .wake-inactive {
+            background-color: #9e9e9e;
+        }
+        
+        @media (orientation: portrait) {
+            #video-player.rotated {
+                transform: rotate(90deg);
+                transform-origin: center;
+                width: 100vh;
+                height: 100vw;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%) rotate(90deg);
+            }
+            
+            .controls {
+                width: 90%;
+                right: 5%;
+            }
+            
+            .url-input {
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="video-container">
-        <!-- Indicador de carregamento -->
-        <div id="loading-indicator">
+    <div class="player-container">
+        <video id="video-player" controls playsinline></video>
+        
+        <div class="controls">
+            <input type="text" class="url-input" id="stream-url" placeholder="Cole a URL do stream HLS" value="https://live-ak.vimeocdn.com/exp=1743369825~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=5bc50d9d6395a2979e94ec54f56ffa3449bae7404b0c66d460070044a1d14ac8/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8">
+            <button class="apply-btn" id="apply-url">Aplicar URL</button>
+            <div class="options">
+                <label>
+                    <input type="checkbox" id="keep-awake" checked>
+                    Manter tela ativa <span id="wake-indicator" class="wake-indicator wake-inactive"></span>
+                </label>
+            </div>
+        </div>
+        
+        <div class="status">
+            <div class="status-indicator connecting" id="status-indicator"></div>
+            <span id="status-text">Conectando...</span>
+        </div>
+        
+        <div class="loading" id="loading">
             <div class="spinner"></div>
             <p>Carregando transmissão...</p>
         </div>
         
-        <!-- Player de vídeo -->
-        <video
-            id="my-video"
-            class="video-js vjs-default-skin vjs-big-play-centered"
-            controls
-            preload="auto"
-            autoplay
-            muted
-            playsinline
-            data-setup='{
-                "liveui": true,
-                "techOrder": ["html5"],
-                "playbackRates": [0.5, 1, 1.5, 2],
-                "controlBar": {
-                    "volumePanel": {"inline": false},
-                    "pictureInPictureToggle": false
-                },
-                "html5": {
-                    "hls": {
-                        "overrideNative": true,
-                        "withCredentials": false,
-                        "smoothQualityChange": true,
-                        "lowLatencyMode": true,
-                        "bufferLength": 1.5,
-                        "maxBufferLength": 4,
-                        "liveSyncDurationCount": 1,
-                        "liveMaxLatencyDurationCount": 2
+        <div class="error-message" id="error-message">
+            <h3>Erro na transmissão</h3>
+            <p id="error-details">Não foi possível carregar o stream.</p>
+            <button class="error-btn" id="retry-btn">Tentar novamente</button>
+        </div>
+    </div>
+    <script>
+        // Elementos principais
+        const videoElement = document.getElementById('video-player');
+        const streamUrlInput = document.getElementById('stream-url');
+        const applyUrlButton = document.getElementById('apply-url');
+        const keepAwakeCheckbox = document.getElementById('keep-awake');
+        const wakeIndicator = document.getElementById('wake-indicator');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const loadingElement = document.getElementById('loading');
+        const errorElement = document.getElementById('error-message');
+        const errorDetails = document.getElementById('error-details');
+        const retryButton = document.getElementById('retry-btn');
+        
+        // Variáveis globais
+        let hls = null;
+        let streamUrl = streamUrlInput.value;
+        let autoRotate = true;
+        let autoFullscreen = true;
+        let wakeLock = null;
+        // Iniciar player
+        function initPlayer(url) {
+            // Limpar instância anterior
+            if (hls) {
+                hls.destroy();
+                hls = null;
+            }
+            
+            // Mostrar carregamento
+            loadingElement.style.display = 'block';
+            errorElement.style.display = 'none';
+            updateStatus('connecting', 'Conectando...');
+            
+            // Verificar se o navegador suporta HLS nativamente
+            if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+                console.log('Usando reprodução nativa de HLS');
+                videoElement.src = url;
+                initVideoEvents();
+            }
+            // Usar HLS.js se disponível
+            else if (Hls.isSupported()) {
+                console.log('Usando HLS.js');
+                hls = new Hls({
+                    lowLatencyMode: true,
+                    backBufferLength: 30,
+                    maxBufferLength: 10,
+                    maxMaxBufferLength: 10
+                });
+                
+                // Eventos do HLS
+                hls.on(Hls.Events.MEDIA_ATTACHED, function() {
+                    console.log('HLS: Media attached');
+                    hls.loadSource(url);
+                });
+                
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    console.log('HLS: Manifest carregado');
+                    playVideo();
+                });
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    if (data.fatal) {
+                        switch(data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.error('HLS: Erro fatal de rede');
+                                if (data.response && data.response.code === 404) {
+                                    showError('Stream não encontrado', 'Verifique se a URL está correta.');
+                                } else {
+                                    showError('Erro de conexão', 'Verifique sua conexão com a internet.');
+                                }
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.error('HLS: Erro fatal de mídia');
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                console.error('HLS: Erro fatal: ' + data.details);
+                                showError('Erro na transmissão', data.details);
+                                break;
+                        }
+                    }
+                });
+                
+                hls.attachMedia(videoElement);
+                initVideoEvents();
+            } 
+            // Fallback para navegadores sem suporte
+            else {
+                console.error('Navegador não suporta HLS');
+                showError('Navegador incompatível', 'Seu navegador não suporta streaming HLS. Tente usar Chrome, Firefox ou Safari.');
+            }
+        }
+        // Inicializar eventos do vídeo
+        function initVideoEvents() {
+            videoElement.addEventListener('loadstart', function() {
+                console.log('Vídeo: Iniciando carregamento');
+            });
+            
+            videoElement.addEventListener('waiting', function() {
+                updateStatus('connecting', 'Carregando buffer...');
+                loadingElement.style.display = 'block';
+            });
+            
+            videoElement.addEventListener('playing', function() {
+                updateStatus('live', 'AO VIVO');
+                loadingElement.style.display = 'none';
+                
+                // Entrar em tela cheia se configurado
+                if (autoFullscreen) {
+                    setTimeout(enterFullscreen, 500);
+                }
+                
+                // Ajustar rotação
+                if (autoRotate) {
+                    adjustRotation();
+                }
+                
+                // Ativar Wake Lock se estiver marcado
+                if (keepAwakeCheckbox.checked) {
+                    activateWakeLock();
+                }
+            });
+            
+            videoElement.addEventListener('error', function() {
+                const error = videoElement.error;
+                let errorMsg = 'Erro desconhecido';
+                
+                if (error) {
+                    switch (error.code) {
+                        case 1: errorMsg = 'Operação abortada'; break;
+                        case 2: errorMsg = 'Erro de rede'; break;
+                        case 3: errorMsg = 'Erro de decodificação'; break;
+                        case 4: errorMsg = 'Formato não suportado'; break;
                     }
                 }
-            }'>
-            <source src="https://live-ak.vimeocdn.com/exp=1743369825~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=5bc50d9d6395a2979e94ec54f56ffa3449bae7404b0c66d460070044a1d14ac8/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8" type="application/x-mpegURL" />
-            <p class="vjs-no-js">
-                Para visualizar este vídeo, habilite o JavaScript e considere atualizar para um navegador que suporte HTML5.
-            </p>
-        </video>
+                
+                showError('Erro na reprodução', errorMsg);
+            });
+            
+            videoElement.addEventListener('pause', function() {
+                // Liberar Wake Lock quando pausado
+                releaseWakeLock();
+            });
+        }
+        // Tentar iniciar a reprodução
+        function playVideo() {
+            videoElement.play().catch(error => {
+                console.warn('Erro ao iniciar reprodução automática:', error.message);
+                
+                if (error.name === 'NotAllowedError') {
+                    showError('Clique para iniciar', 'Os navegadores exigem interação do usuário para iniciar o áudio');
+                    
+                    // Adicionar listener para iniciar com o clique
+                    document.addEventListener('click', function startPlayback() {
+                        videoElement.play().catch(e => console.error('Erro ao reproduzir após clique:', e));
+                        document.removeEventListener('click', startPlayback);
+                        errorElement.style.display = 'none';
+                    }, { once: true });
+                }
+            });
+        }
         
-        <!-- Elemento para exibir mensagens de erro -->
-        <div id="error-message"></div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="https://vjs.zencdn.net/8.6.1/video.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@videojs/http-streaming@3.0.0/dist/videojs-http-streaming.min.js"></script>
-    <script>
-        // Configuração do player de vídeo
-        const player = videojs('my-video', {
-            fluid: true,
-            responsive: true,
-            liveTracker: {
-                trackingThreshold: 0,
-                liveTolerance: 5
-            },
-            html5: {
-                vhs: {
-                    limitRenditionByPlayerDimensions: false,
-                    smoothQualityChange: true,
-                    overrideNative: true
+        // Wake Lock API para manter a tela ativa
+        async function activateWakeLock() {
+            if (!keepAwakeCheckbox.checked) return;
+            
+            try {
+                // Verificar se a API é suportada
+                if ('wakeLock' in navigator) {
+                    // Liberar wake lock anterior se existir
+                    releaseWakeLock();
+                    
+                    // Solicitar novo wake lock
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock ativado com sucesso');
+                    wakeIndicator.classList.remove('wake-inactive');
+                    
+                    // Adicionar listener para reativar quando o documento ficar visível novamente
+                    document.addEventListener('visibilitychange', handleVisibilityChange);
+                } else {
+                    console.log('Wake Lock API não suportada neste navegador');
+                    wakeIndicator.classList.add('wake-inactive');
+                }
+            } catch (error) {
+                console.error('Erro ao ativar Wake Lock:', error.message);
+                wakeIndicator.classList.add('wake-inactive');
+            }
+        }
+        // Liberar Wake Lock
+        function releaseWakeLock() {
+            if (wakeLock) {
+                try {
+                    wakeLock.release();
+                    wakeLock = null;
+                    console.log('Wake Lock liberado');
+                    wakeIndicator.classList.add('wake-inactive');
+                    
+                    // Remover listener de visibilidade
+                    document.removeEventListener('visibilitychange', handleVisibilityChange);
+                } catch (error) {
+                    console.error('Erro ao liberar Wake Lock:', error.message);
                 }
             }
-        });
-
-        // Referência ao indicador de carregamento
-        const loadingIndicator = document.getElementById('loading-indicator');
-
-        // Função para entrar em tela cheia
-        function enterFullScreen() {
+        }
+        
+        // Manipular mudanças de visibilidade para o Wake Lock
+        async function handleVisibilityChange() {
+            if (document.visibilityState === 'visible' && keepAwakeCheckbox.checked) {
+                try {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Wake Lock reativado após mudança de visibilidade');
+                    wakeIndicator.classList.remove('wake-inactive');
+                } catch (error) {
+                    console.error('Erro ao reativar Wake Lock:', error.message);
+                    wakeIndicator.classList.add('wake-inactive');
+                }
+            }
+        }
+        
+        // Atualizar indicador de status
+        function updateStatus(status, message) {
+            statusIndicator.className = 'status-indicator';
+            statusText.textContent = message;
+            
+            switch (status) {
+                case 'live':
+                    statusIndicator.classList.add('live');
+                    break;
+                case 'connecting':
+                    statusIndicator.classList.add('connecting');
+                    break;
+                case 'error':
+                    statusIndicator.classList.add('error');
+                    break;
+            }
+        }
+        // Mostrar mensagem de erro
+        function showError(title, details) {
+            errorElement.querySelector('h3').textContent = title;
+            errorDetails.textContent = details;
+            errorElement.style.display = 'block';
+            loadingElement.style.display = 'none';
+            updateStatus('error', 'Erro');
+        }
+        
+        // Entrar em tela cheia
+        function enterFullscreen() {
             if (document.documentElement.requestFullscreen) {
                 document.documentElement.requestFullscreen();
             } else if (document.documentElement.mozRequestFullScreen) {
@@ -157,176 +481,57 @@
                 document.documentElement.webkitRequestFullscreen();
             } else if (document.documentElement.msRequestFullscreen) {
                 document.documentElement.msRequestFullscreen();
+            } else if (videoElement.webkitEnterFullscreen) {
+                videoElement.webkitEnterFullscreen();
             }
         }
-
-        // Função para ajustar a rotação do vídeo
-        function adjustVideoRotation() {
-            const videoElement = document.querySelector('.video-js');
+        
+        // Ajustar rotação do vídeo
+        function adjustRotation() {
             const isPortrait = window.matchMedia("(orientation: portrait)").matches;
-            
             if (isPortrait) {
-                videoElement.style.transform = 'rotate(90deg)';
-                videoElement.style.width = '100vh';
-                videoElement.style.height = '100vw';
+                videoElement.classList.add('rotated');
             } else {
-                videoElement.style.transform = 'rotate(0deg)';
-                videoElement.style.width = '100%';
-                videoElement.style.height = '100%';
+                videoElement.classList.remove('rotated');
             }
         }
-
-        // Função para ir ao tempo ao vivo
-        function seekToLive() {
-            if (player.liveTracker && player.liveTracker.isLive()) {
-                player.liveTracker.seekToLiveEdge();
-            }
-        }
-
-        // Tenta reconectar em caso de falha
-        function attemptReconnect() {
-            console.log('Tentando reconectar...');
-            player.src({
-                src: "https://live-ak.vimeocdn.com/exp=1743369825~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=5bc50d9d6395a2979e94ec54f56ffa3449bae7404b0c66d460070044a1d14ac8/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8",
-                type: "application/x-mpegURL"
-            });
-            player.play();
-        }
-
-        // Listener para quando o vídeo iniciar o carregamento
-        player.on('loadstart', function() {
-            loadingIndicator.style.display = 'block';
-        });
-
-        // Listener para quando o vídeo estiver pronto para reprodução
-        player.on('loadeddata', function() {
-            loadingIndicator.style.display = 'none';
-        });
-
-        // Listener para iniciar a reprodução e outras ações
-        player.on('play', function() {
-            loadingIndicator.style.display = 'none';
-            enterFullScreen();
-            adjustVideoRotation();
-            seekToLive();
-            const errorMessageDiv = document.getElementById('error-message');
-            errorMessageDiv.innerHTML = '';
-        });
-
-        // Listener para erros
-        player.on('error', function() {
-            const error = player.error();
-            const errorMessageDiv = document.getElementById('error-message');
-            
-            if (error) {
-                console.error('Erro de reprodução:', error);
-                
-                if (error.code === 2 || error.code === 4) {
-                    // Códigos de erro relacionados a problemas de rede ou formato
-                    errorMessageDiv.innerHTML = 'Erro na transmissão. Tentando reconectar...';
-                    // Tenta reconectar após 5 segundos
-                    setTimeout(attemptReconnect, 5000);
-                } else {
-                    errorMessageDiv.innerHTML = `Erro ao reproduzir o vídeo (${error.code}). Tente recarregar a página.`;
-                }
+        // Event listeners
+        applyUrlButton.addEventListener('click', function() {
+            const newUrl = streamUrlInput.value.trim();
+            if (newUrl && newUrl !== streamUrl) {
+                streamUrl = newUrl;
+                initPlayer(streamUrl);
             }
         });
-
-        // Listener para fim da transmissão
-        player.on('ended', function() {
-            console.log('Transmissão finalizada ou interrompida');
-            const errorMessageDiv = document.getElementById('error-message');
-            errorMessageDiv.innerHTML = 'A transmissão foi finalizada ou interrompida. Tentando reconectar...';
-            setTimeout(attemptReconnect, 3000);
+        
+        retryButton.addEventListener('click', function() {
+            initPlayer(streamUrl);
         });
-
-        // Listener para stalled (quando o buffer esgota)
-        player.on('stalled', function() {
-            console.log('Buffer esgotado, aguardando dados...');
-            loadingIndicator.style.display = 'block';
+        
+        keepAwakeCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                activateWakeLock();
+            } else {
+                releaseWakeLock();
+            }
         });
-
-        // Listener para waiting (esperando mais dados)
-        player.on('waiting', function() {
-            loadingIndicator.style.display = 'block';
-        });
-
-        // Listener para quando o vídeo volta a tocar após buffer
-        player.on('playing', function() {
-            loadingIndicator.style.display = 'none';
-        });
-
-        // Listener para mudanças de orientação
+        
         window.addEventListener('orientationchange', function() {
-            // Pequeno atraso para garantir que a orientação foi atualizada
-            setTimeout(adjustVideoRotation, 100);
+            if (autoRotate) {
+                setTimeout(adjustRotation, 300);
+            }
         });
         
-        window.addEventListener('resize', adjustVideoRotation);
-
-        // Verificar conexão e qualidade periodicamente
-        setInterval(function() {
-            if (player.readyState() < 3) { // HAVE_FUTURE_DATA = 3
-                // Se o player não tem dados suficientes
-                console.log('Verificando conexão: buffer baixo');
-                loadingIndicator.style.display = 'block';
-            } else {
-                loadingIndicator.style.display = 'none';
+        window.addEventListener('resize', function() {
+            if (autoRotate) {
+                adjustRotation();
             }
-
-            // Garantir que estamos no ponto mais recente do stream
-            if (player.liveTracker && player.liveTracker.isLive()) {
-                const behindLive = player.liveTracker.liveCurrentTime() - player.currentTime();
-                if (behindLive > 10) { // Se estiver mais de 10 segundos atrasado
-                    console.log('Muito atraso, sincronizando com o tempo ao vivo');
-                    seekToLive();
-                }
-            }
-        }, 5000);
-
-        // Iniciar reprodução automaticamente
-        player.ready(function() {
-            // Desativa o controle de volume em dispositivos móveis
-            if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
-                player.controlBar.volumePanel.hide();
-            }
-            
-            // Inicia a reprodução
-            player.play().then(function() {
-                seekToLive();
-                adjustVideoRotation();
-            }).catch(function(error) {
-                console.log('Erro ao tentar reproduzir automaticamente:', error);
-                // Em dispositivos móveis, o autoplay pode falhar sem interação do usuário
-                const errorMessageDiv = document.getElementById('error-message');
-                errorMessageDiv.innerHTML = 'Toque na tela para iniciar a transmissão';
-                
-                // Adiciona um listener para iniciar a reprodução com o toque do usuário
-                document.addEventListener('click', function startPlayback() {
-                    player.play();
-                    errorMessageDiv.innerHTML = '';
-                    document.removeEventListener('click', startPlayback);
-                }, { once: true });
-            });
         });
-
-        // Previne que a tela desligue durante a reprodução em dispositivos móveis
-        function preventSleep() {
-            if (navigator.wakeLock) {
-                navigator.wakeLock.request('screen').then(lock => {
-                    console.log('Wake Lock ativado');
-                    player.on('ended', () => {
-                        lock.release();
-                        console.log('Wake Lock liberado');
-                    });
-                }).catch(err => {
-                    console.error(`Wake Lock erro: ${err.name}, ${err.message}`);
-                });
-            }
-        }
         
-        // Tenta manter a tela ligada
-        preventSleep();
+        // Iniciar player com a URL padrão
+        document.addEventListener('DOMContentLoaded', function() {
+            initPlayer(streamUrl);
+        });
     </script>
 </body>
 </html>
