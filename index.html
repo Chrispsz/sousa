@@ -1,20 +1,16 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Player de Vídeo</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.3/video-js.min.css" rel="stylesheet">
+    <title>Player HLS</title>
     <style>
         body, html {
             margin: 0;
             padding: 0;
-            width: 100%;
             height: 100%;
-            overflow: hidden;
+            width: 100%;
+            background: #000;
         }
-        
-        #my-video {
+        #player {
             width: 100%;
             height: 100%;
             position: absolute;
@@ -22,43 +18,38 @@
     </style>
 </head>
 <body>
-    <video 
-        id="my-video" 
-        class="video-js vjs-default-skin" 
-        controls 
-        preload="auto" 
-        autoplay
-        muted
-        data-setup='{"fluid": true}'>
-        <source src="https://live-ak.vimeocdn.com/exp=1743365863~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=d77bd5718326f2cf720631820ad83952e2ae2bfc1cb273c2a501c1f3686b24dc/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8" type="application/x-mpegURL">
-    </video>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/video.js/7.20.3/video.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/videojs-contrib-hls/5.15.0/videojs-contrib-hls.min.js"></script>
+    <video id="player" controls autoplay></video>
+    
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <script>
-        var player = videojs('my-video', {
-            autoplay: true,
-            controls: true,
-            fluid: true,
-            html5: {
-                hls: {
-                    overrideNative: true
-                }
-            }
-        });
-        
-        player.ready(function() {
-            // Ativar tela cheia automaticamente
-            player.requestFullscreen();
+        document.addEventListener('DOMContentLoaded', function() {
+            var video = document.getElementById('player');
+            var videoSrc = 'https://live-ak.vimeocdn.com/exp=1743365863~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=d77bd5718326f2cf720631820ad83952e2ae2bfc1cb273c2a501c1f3686b24dc/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8';
             
-            // Configurar para qualidade máxima
-            player.on('loadedmetadata', function() {
-                var availableQualities = player.tech().hls.representations();
-                if (availableQualities && availableQualities.length > 0) {
-                    // Seleciona a qualidade mais alta (geralmente a última na lista)
-                    availableQualities[availableQualities.length - 1].enabled(true);
-                }
-            });
+            if (Hls.isSupported()) {
+                var hls = new Hls();
+                hls.loadSource(videoSrc);
+                hls.attachMedia(video);
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    video.play();
+                    
+                    // Tentar entrar em tela cheia
+                    if (video.requestFullscreen) {
+                        video.requestFullscreen();
+                    } else if (video.webkitRequestFullscreen) {
+                        video.webkitRequestFullscreen();
+                    } else if (video.msRequestFullscreen) {
+                        video.msRequestFullscreen();
+                    }
+                });
+            } 
+            // Para Safari e iOS
+            else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = videoSrc;
+                video.addEventListener('loadedmetadata', function() {
+                    video.play();
+                });
+            }
         });
     </script>
 </body>
