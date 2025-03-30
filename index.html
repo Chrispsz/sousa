@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Live Video Streaming</title>
     <!-- Inclua o CSS do Video.js -->
     <link href="https://vjs.zencdn.net/8.6.1/video-js.css" rel="stylesheet" />
@@ -11,6 +11,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
+            width: 100%;
             overflow: hidden;
             background-color: #000;
         }
@@ -20,11 +21,25 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            position: relative;
         }
         .video-js {
             width: 100% !important;
             height: 100% !important;
             object-fit: cover;
+            transform: rotate(0deg); /* Padrão */
+            transition: transform 0.3s ease; /* Suaviza a rotação */
+        }
+        /* Estilo para rotação em dispositivos móveis ou TVs */
+        @media (orientation: landscape) {
+            .video-js {
+                transform: rotate(0deg); /* Paisagem */
+            }
+        }
+        @media (orientation: portrait) {
+            .video-js {
+                transform: rotate(90deg); /* Retrato */
+            }
         }
         #error-message {
             color: red;
@@ -33,6 +48,7 @@
             bottom: 20px;
             width: 100%;
             z-index: 10;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -52,7 +68,19 @@
                 "playbackRates": [0.5, 1, 1.5, 2],
                 "controlBar": {
                     "volumePanel": {"inline": false},
-                    "pictureInPictureToggle": true
+                    "pictureInPictureToggle": false
+                },
+                "html5": {
+                    "hls": {
+                        "overrideNative": true,
+                        "withCredentials": false,
+                        "smoothQualityChange": true,
+                        "lowLatencyMode": true,
+                        "bufferLength": 2,
+                        "maxBufferLength": 5,
+                        "liveSyncDurationCount": 1,
+                        "liveMaxLatencyDurationCount": 2
+                    }
                 }
             }'>
             <source src="https://live-ak.vimeocdn.com/exp=1743365863~acl=%2F1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4%2F%2A~hmac=d77bd5718326f2cf720631820ad83952e2ae2bfc1cb273c2a501c1f3686b24dc/1f08be1d-e8c0-4229-9585-e3b82dea5779_fmp4/hls.m3u8" type="application/x-mpegURL" />
@@ -92,9 +120,29 @@
             }
         }
 
-        // Listener para iniciar a reprodução e entrar em tela cheia
+        // Função para ajustar a rotação do vídeo
+        function adjustVideoRotation() {
+            const videoElement = document.querySelector('.video-js');
+            const isPortrait = window.matchMedia("(orientation: portrait)").matches;
+            if (isPortrait) {
+                videoElement.style.transform = 'rotate(90deg)';
+            } else {
+                videoElement.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // Função para ir ao tempo ao vivo
+        function seekToLive() {
+            if (player.liveTracker && player.liveTracker.isLive()) {
+                player.liveTracker.seekToLiveEdge();
+            }
+        }
+
+        // Listener para iniciar a reprodução, entrar em tela cheia e ir ao tempo ao vivo
         player.on('play', function() {
             enterFullScreen();
+            adjustVideoRotation();
+            seekToLive(); // Garante que o vídeo vá para o tempo ao vivo
             const errorMessageDiv = document.getElementById('error-message');
             errorMessageDiv.innerHTML = ''; // Limpa mensagens de erro se o vídeo começar a tocar
         });
@@ -108,9 +156,15 @@
             }
         });
 
-        // Tenta iniciar a reprodução automaticamente
+        // Listener para mudanças de orientação
+        window.addEventListener('orientationchange', adjustVideoRotation);
+        window.addEventListener('resize', adjustVideoRotation);
+
+        // Tenta iniciar a reprodução automaticamente e ir ao tempo ao vivo
         player.ready(function() {
-            player.play().catch(function(error) {
+            player.play().then(function() {
+                seekToLive(); // Garante que o vídeo comece no tempo ao vivo
+            }).catch(function(error) {
                 console.log('Erro ao tentar reproduzir automaticamente:', error);
             });
         });
